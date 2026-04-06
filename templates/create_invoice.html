@@ -2,8 +2,7 @@
 
 <form method="post">
 
-<label>Customer</label>
-<select name="customer_id" class="form-control mb-2" required>
+<select name="customer_id">
 {% for c in customers %}
 <option value="{{ c.id }}">{{ c.name }}</option>
 {% endfor %}
@@ -11,23 +10,21 @@
 
 <div id="items"></div>
 
-<button type="button" onclick="addItem()">➕ Add Product</button>
-<br><br>
-<button class="btn btn-success">Create Invoice</button>
+<button type="button" onclick="addItem()">Add Product</button>
+
+<button>Create</button>
+
 </form>
 
 <script>
 function addItem(){
-    document.getElementById("items").innerHTML += `
-    <div style="margin-bottom:10px;">
-        <select name="product_id[]" required>
-        {% for p in products %}
-        <option value="{{ p.id }}">{{ p.name }} (₹{{ p.price }} | Stock: {{ p.stock }})</option>
-        {% endfor %}
-        </select>
-        <input name="quantity[]" type="number" placeholder="Qty" min="1" required>
-        <button type="button" onclick="this.parentElement.remove()">❌ Remove</button>
-    </div>
-    `;
+document.getElementById("items").innerHTML += `
+<select name="product_id[]">
+{% for p in products %}
+<option value="{{ p.id }}">{{ p.name }}</option>
+{% endfor %}
+</select>
+<input name="quantity[]" placeholder="Qty">
+`;
 }
 </script>

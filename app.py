@@ -6,6 +6,9 @@ from sqlalchemy import func
 from werkzeug.security import generate_password_hash, check_password_hash
 import io, urllib.parse, os
 from datetime import datetime
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
 
@@ -37,30 +40,8 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100))
     price = db.Column(db.Float)
-    cost_price = db.Column(db.Float, default=0)
     stock = db.Column(db.Integer, default=0)
     created_at = db.Column(db.String(50), default=lambda: datetime.now().strftime("%d-%m-%Y"))
-
-# ---------------- INVOICE ITEMS ----------------
-
-class InvoiceItem(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-
-    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'))
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'))
-
-    product = db.relationship('Product')
-
-    quantity = db.Column(db.Integer)
-    price = db.Column(db.Float)
-
-    def subtotal(self):
-        return self.quantity * self.price
-
-    def profit(self):
-        return (self.price - (self.product.cost_price or 0)) * self.quantity
-
-# ---------------- COMPANY ----------------
 
 class Company(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -69,37 +50,22 @@ class Company(db.Model):
     phone = db.Column(db.String(20))
     address = db.Column(db.String(200))
 
-# ---------------- INVOICE ----------------
-
 class Invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-
     customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'))
     customer = db.relationship('Customer')
 
-    amount = db.Column(db.Float, default=0)
+    amount = db.Column(db.Float)
     gst_percent = db.Column(db.Float, default=18)
     date = db.Column(db.String(50), default=lambda: datetime.now().strftime("%d-%m-%Y"))
     status = db.Column(db.String(50), default="pending")
 
-    items = db.relationship(
-        'InvoiceItem',
-        backref='invoice',
-        lazy=True,
-        cascade="all, delete-orphan"
-    )
-
-    def subtotal(self):
-        return sum([i.subtotal() for i in self.items])
-
     def total(self):
-        subtotal = self.subtotal()
-        return round(subtotal + (subtotal * self.gst_percent / 100), 2)
+        return round(self.amount + (self.amount * self.gst_percent / 100), 2)
 
-    def profit(self):
-        return sum([i.profit() for i in self.items])
-
-# ---------------- PAYMENT ----------------
+    def paid_amount(self):
+        payments = Payment.query.filter_by(invoice_id=self.id).all()
+        return sum([p.amount for p in payments])
 
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -107,18 +73,11 @@ class Payment(db.Model):
     amount = db.Column(db.Float)
     date = db.Column(db.String(50), default=lambda: datetime.now().strftime("%d-%m-%Y"))
 
-# ---------------- TRANSACTION ----------------
-
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     amount = db.Column(db.Float)
     type = db.Column(db.String(50))  # income / expense
     date = db.Column(db.String(50), default=lambda: datetime.now().strftime("%d-%m-%Y"))
-
-# ---------------- HELPERS ----------------
-
-def update_invoice_amount(invoice):
-    invoice.amount = sum([i.subtotal() for i in invoice.items])
 
 # ---------------- AUTH ----------------
 
@@ -139,7 +98,7 @@ def logout():
     session.clear()
     return redirect("/")
 
-# ---------------- ADMIN ----------------
+# ---------------- ADMIN DASHBOARD ----------------
 
 class MyAdminHome(AdminIndexView):
     @expose("/")
@@ -149,21 +108,22 @@ class MyAdminHome(AdminIndexView):
 
         income = db.session.query(func.sum(Transaction.amount)).filter_by(type="income").scalar() or 0
         expense = db.session.query(func.sum(Transaction.amount)).filter_by(type="expense").scalar() or 0
+        profit = income - expense
 
-        total_profit = sum([i.profit() for i in InvoiceItem.query.all()])
-        low_stock = Product.query.filter(Product.stock < 5).all()
+        invoices = Invoice.query.order_by(Invoice.id.desc()).limit(10).all()
+        total_invoices = Invoice.query.count()
+        paid = Invoice.query.filter_by(status="paid").count()
+        customers = Customer.query.count()
 
         return self.render(
             "admin_home.html",
             income=income,
             expense=expense,
-            profit=income - expense,
-            total_invoices=Invoice.query.count(),
-            paid_invoices=Invoice.query.filter_by(status="paid").count(),
-            customers=Customer.query.count(),
-            invoices=Invoice.query.order_by(Invoice.id.desc()).limit(10),
-            product_profit=total_profit,
-            low_stock=low_stock
+            profit=profit,
+            total_invoices=total_invoices,
+            paid_invoices=paid,
+            customers=customers,
+            invoices=invoices
         )
 
 class SecureModelView(ModelView):
@@ -174,149 +134,131 @@ class SecureModelView(ModelView):
         return redirect("/")
 
 admin = Admin(app, name="Mobi Invoice", index_view=MyAdminHome())
-admin.add_view(SecureModelView(User, db.session))
-admin.add_view(SecureModelView(Customer, db.session))
-admin.add_view(SecureModelView(Product, db.session))
-admin.add_view(SecureModelView(Invoice, db.session))
-admin.add_view(SecureModelView(InvoiceItem, db.session))
-admin.add_view(SecureModelView(Payment, db.session))
-admin.add_view(SecureModelView(Transaction, db.session))
+admin.add_view(SecureModelView(User, db.session, category="Management"))
+admin.add_view(SecureModelView(Customer, db.session, category="Management"))
+admin.add_view(SecureModelView(Product, db.session, category="Inventory"))
+admin.add_view(SecureModelView(Invoice, db.session, category="Accounting"))
+admin.add_view(SecureModelView(Payment, db.session, category="Accounting"))
+admin.add_view(SecureModelView(Transaction, db.session, category="Accounting"))
+admin.add_view(SecureModelView(Company, db.session, category="Settings"))
 
-# ---------------- BILLING ----------------
+# ---------------- INVOICE LIST ----------------
 
-@app.route("/invoice/create", methods=["GET", "POST"])
-def create_invoice():
+@app.route("/invoices")
+def invoices_page():
     if not session.get("admin"):
         return redirect("/")
 
-    customers = Customer.query.all()
-    products = Product.query.all()
+    data = Invoice.query.order_by(Invoice.id.desc()).all()
+    return render_template("invoice_list.html", invoices=data)
 
-    if request.method == "POST":
-        invoice = Invoice(customer_id=request.form.get("customer_id"))
-        db.session.add(invoice)
-        db.session.commit()
+# ---------------- INVENTORY PAGE ----------------
 
-        return redirect(f"/invoice/edit/{invoice.id}")
-
-    return render_template("create_invoice.html", customers=customers, products=products)
-
-@app.route("/invoice/edit/<int:id>")
-def edit_invoice(id):
+@app.route("/products")
+def products_page():
     if not session.get("admin"):
         return redirect("/")
 
+    products = Product.query.order_by(Product.id.desc()).all()
+    return render_template("products.html", products=products)
+
+
+
+
+# ---------------- PDF ----------------
+
+@app.route("/invoice/pdf/<int:id>")
+def invoice_pdf(id):
     invoice = db.session.get(Invoice, id)
-    products = Product.query.all()
+    if not invoice:
+        return "Invoice not found", 404
 
-    return render_template("create_invoice.html", invoice=invoice, products=products)
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
 
-# ---------------- ITEM ACTIONS ----------------
+    gst = invoice.amount * invoice.gst_percent / 100
 
-@app.route("/invoice/add_item/<int:invoice_id>", methods=["POST"])
-def add_item(invoice_id):
-    invoice = db.session.get(Invoice, invoice_id)
+    table_data = [
+        ["Field", "Value"],
+        ["Invoice ID", invoice.id],
+        ["Customer", invoice.customer.name],
+        ["Phone", invoice.customer.phone],
+        ["Date", invoice.date],
+        ["Amount", f"₹{invoice.amount}"],
+        ["GST", f"₹{gst}"],
+        ["Total", f"₹{invoice.total()}"]
+    ]
 
-    if invoice.status == "paid":
-        return "Invoice locked"
+    table = Table(table_data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
 
-    product = db.session.get(Product, request.form.get("product_id"))
-    qty = int(request.form.get("quantity"))
+    content = [
+        Paragraph("<b>Mobi Invoice</b>", styles["Title"]),
+        Spacer(1, 10),
+        table
+    ]
 
-    if product.stock < qty:
-        return "Stock not available"
+    doc.build(content)
+    buffer.seek(0)
 
-    item = InvoiceItem(
-        invoice_id=invoice_id,
-        product_id=product.id,
-        quantity=qty,
-        price=product.price
-    )
+    return send_file(buffer, as_attachment=True, download_name=f"invoice_{id}.pdf")
 
-    product.stock -= qty
-    db.session.add(item)
+# ---------------- WHATSAPP ----------------
 
-    update_invoice_amount(invoice)
-
-    db.session.commit()
-    return redirect(f"/invoice/edit/{invoice_id}")
-
-@app.route("/invoice/remove_item/<int:item_id>")
-def remove_item(item_id):
-    item = db.session.get(InvoiceItem, item_id)
-    invoice = item.invoice
-
-    if invoice.status == "paid":
-        return "Invoice locked"
-
-    item.product.stock += item.quantity
-    db.session.delete(item)
-
-    update_invoice_amount(invoice)
-
-    db.session.commit()
-    return redirect(f"/invoice/edit/{invoice.id}")
-
-@app.route("/invoice/update_item/<int:item_id>", methods=["POST"])
-def update_item(item_id):
-    item = db.session.get(InvoiceItem, item_id)
-    invoice = item.invoice
-
-    if invoice.status == "paid":
-        return "Invoice locked"
-
-    new_qty = int(request.form.get("quantity"))
-    diff = new_qty - item.quantity
-
-    if diff > 0:
-        if item.product.stock < diff:
-            return "Not enough stock"
-        item.product.stock -= diff
-
-    elif diff < 0:
-        item.product.stock += abs(diff)
-
-    item.quantity = new_qty
-
-    update_invoice_amount(invoice)
-
-    db.session.commit()
-    return redirect(f"/invoice/edit/{invoice.id}")
-
-# ---------------- FINALIZE ----------------
-
-@app.route("/invoice/finalize/<int:id>")
-def finalize_invoice(id):
+@app.route("/invoice/whatsapp/<int:id>")
+def whatsapp_send(id):
     invoice = db.session.get(Invoice, id)
+    if not invoice:
+        return "Invoice not found", 404
 
-    invoice.status = "paid"
+    msg = f"""Invoice #{invoice.id}
+Customer: {invoice.customer.name}
+Amount: ₹{invoice.total()}
+Status: {invoice.status}
 
-    db.session.add(Transaction(
-        amount=invoice.total(),
-        type="income"
-    ))
+Thank you 🙏"""
 
-    db.session.commit()
+    url = "https://wa.me/" + invoice.customer.phone + "?text=" + urllib.parse.quote(msg)
+    return redirect(url)
 
-    return redirect("/invoices")
+# ---------------- API ----------------
 
-# ---------------- STOCK ALERT ----------------
+@app.route("/api/invoices")
+def api_invoices():
+    data = Invoice.query.all()
+    return jsonify([
+        {
+            "id": i.id,
+            "customer": i.customer.name,
+            "amount": i.total(),
+            "status": i.status
+        } for i in data
+    ])
 
-@app.route("/stock-alert")
-def stock_alert():
-    products = Product.query.filter(Product.stock < 5).all()
-    return jsonify([{"name": p.name, "stock": p.stock} for p in products])
+@app.route("/api/transactions")
+def api_transactions():
+    data = Transaction.query.all()
+    return jsonify([
+        {
+            "id": t.id,
+            "amount": t.amount,
+            "type": t.type,
+            "date": t.date
+        } for t in data
+    ])
 
 # ---------------- INIT ----------------
 
 with app.app_context():
     db.create_all()
     if not User.query.first():
-        db.session.add(User(
-            username="admin",
-            password=generate_password_hash("admin")
-        ))
+        db.session.add(User(username="admin", password=generate_password_hash("admin")))
         db.session.commit()
 
 # ---------------- VERCEL ----------------
+
 app = app
