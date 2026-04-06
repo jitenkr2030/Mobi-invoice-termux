@@ -2,14 +2,18 @@
   "version": 2,
   "builds": [
     {
-      "src": "vercel/app.py",
+      "src": "app.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "vercel/app.py"
+      "dest": "app.py"
     }
-  ]
+  ],
+  "env": {
+    "VERCEL": "1",
+    "SECRET_KEY": "your-production-secret"
+  }
 }
