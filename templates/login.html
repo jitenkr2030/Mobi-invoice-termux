@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mobi Invoice - Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #4f46e5, #06b6d4);
+            height:100vh;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+        }
+
+        .login-card {
+            background:white;
+            border-radius:16px;
+            padding:30px;
+            width:100%;
+            max-width:400px;
+            box-shadow:0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .logo {
+            font-size:28px;
+            font-weight:bold;
+            text-align:center;
+            margin-bottom:10px;
+        }
+
+        .subtitle {
+            text-align:center;
+            color:gray;
+            margin-bottom:20px;
+        }
+
+        .form-control {
+            border-radius:10px;
+        }
+
+        .btn-login {
+            border-radius:10px;
+            padding:10px;
+            font-weight:bold;
+        }
+
+        .footer-text {
+            text-align:center;
+            margin-top:15px;
+            font-size:14px;
+            color:gray;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="login-card">
+
+    <div class="logo">📱 Mobi Invoice</div>
+    <div class="subtitle">Smart Accounting for Your Business</div>
+
+    <!-- Error Message -->
+    {% if error %}
+        <div class="alert alert-danger text-center">{{ error }}</div>
+    {% endif %}
+
+    <form method="post">
+        <input name="username" class="form-control mb-3" placeholder="Username" required>
+        <input name="password" type="password" class="form-control mb-3" placeholder="Password" required>
+
+        <button class="btn btn-primary w-100 btn-login">Login</button>
+    </form>
+
+    <div class="footer-text">
+        Secure Login • Powered by Mobi Invoice
+    </div>
+
+</div>
+
+</body>
+</html>

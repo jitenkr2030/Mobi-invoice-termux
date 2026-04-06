@@ -1,0 +1,33 @@
+<h3>Create Invoice</h3>
+
+<form method="post">
+
+<label>Customer</label>
+<select name="customer_id" class="form-control mb-2" required>
+{% for c in customers %}
+<option value="{{ c.id }}">{{ c.name }}</option>
+{% endfor %}
+</select>
+
+<div id="items"></div>
+
+<button type="button" onclick="addItem()">➕ Add Product</button>
+<br><br>
+<button class="btn btn-success">Create Invoice</button>
+</form>
+
+<script>
+function addItem(){
+    document.getElementById("items").innerHTML += `
+    <div style="margin-bottom:10px;">
+        <select name="product_id[]" required>
+        {% for p in products %}
+        <option value="{{ p.id }}">{{ p.name }} (₹{{ p.price }} | Stock: {{ p.stock }})</option>
+        {% endfor %}
+        </select>
+        <input name="quantity[]" type="number" placeholder="Qty" min="1" required>
+        <button type="button" onclick="this.parentElement.remove()">❌ Remove</button>
+    </div>
+    `;
+}
+</script>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inventory</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+</head>
+<body class="container mt-3">
+
+<h4>📦 Products</h4>
+
+<a href="/admin/product/new" class="btn btn-success mb-3">+ Add Product</a>
+
+<div class="table-responsive">
+<table class="table table-bordered">
+<tr>
+    <th>ID</th>
+    <th>Name</th>
+    <th>Price</th>
+    <th>Stock</th>
+</tr>
+
+{% for p in products %}
+<tr>
+    <td>{{ p.id }}</td>
+    <td>{{ p.name }}</td>
+    <td>₹{{ p.price }}</td>
+    <td>{{ p.stock }}</td>
+</tr>
+{% endfor %}
+
+</table>
+</div>
+
+</body>
+</html>

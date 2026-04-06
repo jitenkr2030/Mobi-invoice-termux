@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mobi Invoice - Invoices</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+
+    <style>
+        body { background:#f4f6f9; }
+
+        .card {
+            border-radius:12px;
+            border:none;
+            box-shadow:0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .top-bar {
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px;
+            justify-content:space-between;
+            align-items:center;
+        }
+
+        .badge-paid { background:green; }
+        .badge-pending { background:orange; }
+
+        @media(max-width:768px){
+            .top-bar {
+                flex-direction:column;
+                align-items:stretch;
+            }
+        }
+    </style>
+</head>
+
+<body class="container mt-3">
+
+<!-- Top Section -->
+<div class="card p-3 mb-3">
+    <div class="top-bar">
+
+        <h4>📋 Invoices</h4>
+
+        <div class="d-flex gap-2 flex-wrap">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search customer...">
+
+            <select id="statusFilter" class="form-control">
+                <option value="">All</option>
+                <option value="paid">Paid</option>
+                <option value="pending">Pending</option>
+            </select>
+
+            <a href="/admin/invoice/new" class="btn btn-success">+ Add</a>
+        </div>
+
+    </div>
+</div>
+
+<!-- Table -->
+<div class="card p-3">
+    <div class="table-responsive">
+        <table class="table table-bordered" id="invoiceTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Customer</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for i in invoices %}
+                <tr>
+                    <td>{{ i.id }}</td>
+                    <td class="customer">{{ i.customer.name }}</td>
+                    <td>₹{{ i.total() }}</td>
+
+                    <td class="status">
+                        {% if i.status == "paid" %}
+                            <span class="badge badge-paid">Paid</span>
+                        {% else %}
+                            <span class="badge badge-pending">Pending</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <div class="d-flex flex-wrap gap-1">
+                            <a href="/invoice/pdf/{{ i.id }}" class="btn btn-sm btn-secondary">PDF</a>
+                            <a href="/invoice/whatsapp/{{ i.id }}" class="btn btn-sm btn-success">WA</a>
+                            <a href="/admin/invoice/edit/?id={{ i.id }}" class="btn btn-sm btn-primary">Edit</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+
+        </table>
+    </div>
+</div>
+
+<!-- Script -->
+<script>
+// Search + Filter
+const searchInput = document.getElementById("searchInput");
+const statusFilter = document.getElementById("statusFilter");
+
+function filterTable(){
+    let search = searchInput.value.toLowerCase();
+    let status = statusFilter.value;
+
+    let rows = document.querySelectorAll("#invoiceTable tbody tr");
+
+    rows.forEach(row => {
+        let customer = row.querySelector(".customer").innerText.toLowerCase();
+        let rowStatus = row.querySelector(".status").innerText.toLowerCase();
+
+        let matchSearch = customer.includes(search);
+        let matchStatus = status === "" || rowStatus.includes(status);
+
+        row.style.display = (matchSearch && matchStatus) ? "" : "none";
+    });
+}
+
+searchInput.addEventListener("keyup", filterTable);
+statusFilter.addEventListener("change", filterTable);
+</script>
+
+</body>
+</html>
